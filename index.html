@@ -23,4 +23,58 @@ function showFoodForm(){const box=document.querySelector('#modal .modal');if(doc
 function saveNewFood(){const name=document.getElementById('new-name').value.trim(),pack=+document.getElementById('new-pack').value,pieces=+document.getElementById('new-pieces').value,kcal100=+document.getElementById('new-kcal').value,protein100=+document.getElementById('new-protein').value;if(!name||!pack||!pieces||!kcal100){alert('Enter the name, pack weight, pieces and calories.');return}const grams=pack/pieces,kcal=Math.round(kcal100*grams/100),protein=+(protein100*grams/100).toFixed(1),f=[name,kcal,protein,`${Math.round(grams*10)/10} g (1 piece)`];foods.push(f);customFoods.push(f);localStorage.setItem(customKey,JSON.stringify(customFoods));add(name,kcal,protein);closeAdd()}
 // Add the currently reported chikki using an editable provisional estimate.
 if(!localStorage.getItem('krishna_chikki_logged')){rows.push(['Snack','Flax, groundnut & sesame chikki','1 piece (15.6 g)',85,3]);localStorage.setItem('krishna_chikki_logged','1');render()}
+</script><script>
+// History and analytics layer. Local snapshots are a temporary bridge until Supabase is connected.
+(function(){
+  const dayKey=()=>new Date().toISOString().slice(0,10);
+  const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch(e){return d}};
+  const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+  const snapshots=read('krishna_daily_snapshots',{});
+  const weights=read('krishna_weight_log',[
+    {date:'2026-09-12',kg:98.7},{date:'2026-09-19',kg:97.3},{date:'2026-09-24',kg:95.5}
+  ]);
+  write('krishna_weight_log',weights);
+  function saveSnapshot(){
+    const date=dayKey(), calories=rows.reduce((s,x)=>s+x[3],0), protein=rows.reduce((s,x)=>s+x[4],0);
+    snapshots[date]={date,calories,protein,entries:rows.map(x=>({meal:x[0],name:x[1],qty:x[2],calories:x[3],protein:x[4]}))};
+    write('krishna_daily_snapshots',snapshots);
+  }
+  const baseRender=window.render;
+  window.render=function(){baseRender();saveSnapshot();updateWeightCard()};
+  function updateWeightCard(){
+    const el=document.querySelector('.hero .card:nth-child(3) .big'); if(!el)return;
+    const last=weights.slice().sort((a,b)=>a.date.localeCompare(b.date)).at(-1); if(!last)return;
+    el.innerHTML=`${last.kg.toFixed(1)} <small>kg</small>`;
+    const foot=document.querySelector('.hero .card:nth-child(3) .foot'); if(foot)foot.innerHTML=`<span>${weights[0].kg.toFixed(1)} kg start</span><span class="green">${(last.kg-weights[0].kg).toFixed(1)} kg</span>`;
+  }
+  function closePanel(){document.querySelectorAll('.history-panel').forEach(x=>x.remove())}
+  function panel(title,body){closePanel();const bg=document.createElement('div');bg.className='modal-bg history-panel';bg.innerHTML=`<div class="modal analytics-modal"><div class="modal-title"><div><p class="eyebrow">KRISHNA CUT</p><h2>${title}</h2></div><button class="nav panel-close" style="width:auto;color:#7d8998">✕</button></div>${body}</div>`;bg.addEventListener('click',e=>{if(e.target===bg)closePanel()});document.body.appendChild(bg);bg.querySelector('.panel-close').onclick=closePanel;return bg.querySelector('.modal')}
+  function fmt(n){return Math.round(n).toLocaleString('en-IN')}
+  function aggregate(days){const list=Object.values(snapshots).filter(x=>x.date>=days.start&&x.date<=days.end);return {days:list.length,cal:list.reduce((s,x)=>s+x.calories,0),protein:list.reduce((s,x)=>s+x.protein,0),avgCal:list.length?list.reduce((s,x)=>s+x.calories,0)/list.length:0,avgProtein:list.length?list.reduce((s,x)=>s+x.protein,0)/list.length:0}}
+  function lineChart(data){
+    if(!data.length)return '<div class="empty-state">No weigh-ins in this period yet. Add a reading below.</div>';
+    const w=640,h=210,p=28,min=Math.min(...data.map(x=>x.kg))-1,max=Math.max(...data.map(x=>x.kg))+1,dx=(w-2*p)/Math.max(1,data.length-1),dy=(h-2*p)/(max-min);
+    const pts=data.map((x,i)=>`${p+i*dx},${h-p-(x.kg-min)*dy}`).join(' ');
+    return `<svg class="weight-chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="Weight trend"><line x1="${p}" x2="${w-p}" y1="${h-p}" y2="${h-p}"/><polyline points="${pts}"/>${data.map((x,i)=>`<circle cx="${p+i*dx}" cy="${h-p-(x.kg-min)*dy}" r="4"><title>${x.date}: ${x.kg} kg</title></circle>`).join('')}<text x="${p}" y="18">${max.toFixed(1)} kg</text><text x="${p}" y="${h-4}">${min.toFixed(1)} kg</text></svg>`;
+  }
+  function progressPanel(){
+    const all=weights.slice().sort((a,b)=>a.date.localeCompare(b.date)), now=new Date(), start7=new Date(now-6*86400000), start30=new Date(now-29*86400000);
+    const week=aggregate({start:start7.toISOString().slice(0,10),end:dayKey()}), month=aggregate({start:start30.toISOString().slice(0,10),end:dayKey()});
+    const m=panel('Progress & insights',`<div class="analytics-tabs"><button class="analytics-tab active" data-period="7">7 days</button><button class="analytics-tab" data-period="30">30 days</button><button class="analytics-tab" data-period="all">All time</button></div><div id="analytics-content"></div><div class="divider"></div><h3>Record a weigh-in</h3><div class="inline-form"><input id="weight-date" type="date" value="${dayKey()}"><input id="weight-value" type="number" step="0.1" placeholder="kg"><button class="primary" id="save-weight">Save</button></div>`);
+    const renderPeriod=(period)=>{const data=period==='7'?all.filter(x=>x.date>=start7.toISOString().slice(0,10)):period==='30'?all.filter(x=>x.date>=start30.toISOString().slice(0,10)):all;const stat=period==='7'?week:period==='30'?month:null;const delta=data.length>1?data.at(-1).kg-data[0].kg:0;m.querySelector('#analytics-content').innerHTML=`<div class="insight-grid"><div><span>Latest</span><b>${data.length?data.at(-1).kg.toFixed(1):'—'} kg</b></div><div><span>Change</span><b class="${delta<=0?'green':''}">${data.length>1?(delta>0?'+':'')+delta.toFixed(1):'—'} kg</b></div><div><span>Avg calories</span><b>${stat&&stat.days?fmt(stat.avgCal):'—'}</b></div><div><span>Avg protein</span><b>${stat&&stat.days?fmt(stat.avgProtein)+' g':'—'}</b></div></div>${lineChart(data)}<p class="muted">Weight is a time series, not a fixed value. We’ll compare intake, protein, steps, sleep and weigh-ins once more history is logged.</p>`};
+    renderPeriod('7');m.querySelectorAll('.analytics-tab').forEach(b=>b.onclick=()=>{m.querySelectorAll('.analytics-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderPeriod(b.dataset.period)});
+    m.querySelector('#save-weight').onclick=()=>{const d=m.querySelector('#weight-date').value,v=+m.querySelector('#weight-value').value;if(!d||!v)return;const i=weights.findIndex(x=>x.date===d);if(i>=0)weights[i].kg=v;else weights.push({date:d,kg:v});weights.sort((a,b)=>a.date.localeCompare(b.date));write('krishna_weight_log',weights);updateWeightCard();renderPeriod('all');m.querySelector('#weight-value').value=''};
+  }
+  function historyPanel(){
+    const now=new Date(), y=now.getFullYear(), mo=now.getMonth(), first=new Date(y,mo,1).getDay(), last=new Date(y,mo+1,0).getDate();
+    let cells='';for(let i=0;i<first;i++)cells+='<span></span>';for(let d=1;d<=last;d++){const date=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`,s=snapshots[date];cells+=`<button class="cal-day ${s?'logged':''}" data-date="${date}">${d}${s?`<small>${fmt(s.calories)}</small>`:''}</button>`}
+    const m=panel('Food history',`<div class="history-head"><button class="add" id="prev-month">‹</button><b>${now.toLocaleString('en-IN',{month:'long',year:'numeric'})}</b><button class="add" id="next-month">›</button></div><div class="calendar-week"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">${cells}</div><div class="history-detail" id="history-detail"><p class="muted">Logged days are highlighted. Select a date to inspect calories and protein.</p></div>`);
+    m.querySelectorAll('.cal-day.logged').forEach(b=>b.onclick=()=>{const s=snapshots[b.dataset.date];m.querySelector('#history-detail').innerHTML=`<h3>${b.dataset.date}</h3><div class="insight-grid"><div><span>Calories</span><b>${fmt(s.calories)}</b></div><div><span>Protein</span><b>${fmt(s.protein)} g</b></div></div><p class="muted">${s.entries.map(e=>e.name).join(' · ')}</p>`});
+  }
+  function foodPanel(){panel('Food catalogue',`<div class="insight-grid"><div><span>Built-in foods</span><b>${foods.length}</b></div><div><span>Custom foods</span><b>${customFoods.length}</b></div><div><span>Tracked nutrients</span><b>20+</b></div><div><span>Future insight model</span><b>Ready</b></div></div><p class="muted">Each food can carry macros, minerals, vitamins, serving conversions, brand, barcode, preparation and confidence/source metadata.</p><button class="primary" onclick="closePanel();openAdd()">＋ Add or define food</button>`)}
+  const navs=[...document.querySelectorAll('.side .nav')];navs.forEach(b=>{const t=b.textContent; if(t.includes('Progress'))b.onclick=progressPanel;else if(t.includes('Food log'))b.onclick=historyPanel;else if(t.includes('Foods'))b.onclick=foodPanel;else if(t.includes('Today'))b.onclick=()=>{closePanel();window.scrollTo(0,0)}});
+  const h=document.createElement('style');h.textContent=`.analytics-modal{width:min(760px,100%)}.analytics-tabs{display:flex;gap:8px;margin:14px 0}.analytics-tab{border:1px solid #dfe5eb;background:#fafbfc;border-radius:9px;padding:8px 12px;cursor:pointer}.analytics-tab.active{background:#18263b;color:#fff}.insight-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.insight-grid>div{background:#f7f9fa;border-radius:11px;padding:13px}.insight-grid span,.insight-grid b{display:block}.insight-grid span{font-size:11px;color:#7b8798}.insight-grid b{font:700 18px 'Space Grotesk';margin-top:5px}.weight-chart{width:100%;height:220px;background:#fbfcfd;border:1px solid #eef1f3;border-radius:12px}.weight-chart line{stroke:#dfe6ea}.weight-chart polyline{fill:none;stroke:#83ad32;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}.weight-chart circle{fill:#18263b;stroke:#d4f168;stroke-width:3}.weight-chart text{fill:#7b8798;font:12px 'DM Sans'}.divider{border-top:1px solid #eef0f3;margin:20px 0}.inline-form{display:flex;gap:9px}.inline-form input{border:1px solid #dfe5eb;border-radius:8px;padding:10px;font:inherit;min-width:0;flex:1}.empty-state{padding:35px 15px;text-align:center;color:#7b8798;background:#fbfcfd;border-radius:11px}.history-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.history-head .add{width:42px;padding:7px}.calendar-week,.calendar-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}.calendar-week span{font-size:11px;color:#8995a5;text-align:center}.cal-day{min-height:42px;border:1px solid #edf0f2;border-radius:8px;background:#fff;cursor:pointer;font:inherit}.cal-day.logged{background:#eff7dc;border-color:#cfe3a4;font-weight:600}.cal-day small{display:block;font-size:9px;color:#6d7c8d;margin-top:3px}.history-detail{margin-top:18px;border-top:1px solid #eef0f3;padding-top:14px}@media(max-width:620px){.insight-grid{grid-template-columns:1fr 1fr}.inline-form{flex-wrap:wrap}.inline-form input{min-width:45%}}`;document.head.appendChild(h);
+  window.render();
+})();
 </script></body></html>
+
