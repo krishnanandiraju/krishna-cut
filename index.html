@@ -26,7 +26,7 @@ if(!localStorage.getItem('krishna_chikki_logged')){rows.push(['Snack','Flax, gro
 </script><script>
 // History and analytics layer. Local snapshots are a temporary bridge until Supabase is connected.
 (function(){
-  const dayKey=()=>new Date().toISOString().slice(0,10);
+  const dayKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
   const read=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||JSON.stringify(d))}catch(e){return d}};
   const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
   const snapshots=read('krishna_daily_snapshots',{});
