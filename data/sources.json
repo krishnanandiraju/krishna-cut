@@ -1,0 +1,32 @@
+{
+  "indb": {
+    "name": "Indian Nutrient Databank (INDB)",
+    "version": "November 2024 download",
+    "url": "https://www.anuvaad.org.in/indian-nutrient-databank/",
+    "download": "https://www.anuvaad.org.in/wp-content/uploads/2020/07/Anuvaad_INDB_2024.11.xlsx",
+    "citation": "Vijayakumar A, Dubasi HB, Awasthi A, Jaacks LM. Development of an Indian Food Composition Database. Current Developments in Nutrition (2024), 103790. doi:10.1016/j.cdnut.2024.103790",
+    "licence": "Publicly downloadable research dataset. No separate data licence is stated on the download. Authors and source retained.",
+    "file": "Anuvaad_INDB_2024.11.xlsx",
+    "count": 1014,
+    "sha256": "c39023890f45b86b7f68578a4f740c5772234402111054c28a7a867d8dda25d9"
+  },
+  "cofid": {
+    "name": "CoFID ingredient reference (UK)",
+    "version": "2021",
+    "url": "https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid",
+    "download": "https://assets.publishing.service.gov.uk/media/60538b91e90e07527df82ae4/McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx",
+    "citation": "Public Health England. McCance and Widdowson’s Composition of Foods Integrated Dataset (2021). Contains public sector information licensed under the Open Government Licence v3.0.",
+    "licence": "Open Government Licence v3.0: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+    "file": "CoFID_2021.xlsx",
+    "count": 826,
+    "sha256": "436e9445ef2adb2a75f3d7edd51302de3adad25385f9795fc94ba58bd030e97d"
+  },
+  "saved": {
+    "name": "Krishna’s saved foods",
+    "version": "Recovered September 2026",
+    "url": null,
+    "citation": "43 entries from the saved food workbook and 5 entries from the earlier app. Evidence and unknown values are preserved.",
+    "licence": "Personal labels, prior lookups and estimates; not independently re-verified.",
+    "count": 48
+  }
+}

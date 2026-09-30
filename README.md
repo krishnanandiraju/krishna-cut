@@ -1,20 +1,25 @@
 # Krishna Cut
 
-A focused food and weight dashboard built around Krishna’s real logging patterns: branded foods, meal grouping, protein protection, weight trend and adjustable estimates.
+Personal food and weight tracker, hosted at https://krishnanandiraju.github.io/krishna-cut/.
 
-## Run locally
+Static HTML/CSS/JavaScript; no build step or credentials are required to search the food catalogue. Serve the repository with any static HTTP server for development.
 
-```bash
-npm install
-npm run dev
-```
+## Food catalogue (30 September 2026)
 
-The current UI runs with realistic demo data so the product can be reviewed before connecting a database.
+- 1,014 recipe records from the Indian Nutrient Databank (INDB).
+- 826 selected reference ingredients from CoFID 2021 (UK); preparation and food names are retained.
+- 48 personal saved foods: 43 from the earlier food workbook plus five earlier app records. Their packet, lookup, estimate or unknown status is visible.
+- 42 nutrient fields; coverage differs by source. Missing values remain null; trace is retained as `Tr`. Source recipe portions and measured gram amounts use separate nutrient vectors.
+- Search aliases include Indian names such as atukulu, varigalu, bhindi and palak. Search does not certify a recipe as vegetarian.
 
-## Low-cost hosting plan
+The food data is in `data/foods.json`. Every food has a source and original code, reference quantity/unit and evidence note. Nutrient vector positions are defined by `nutrientDefinitions`. Original download URLs, source citations, licences and SHA-256 hashes are in `data/sources.json`. INDB is calculated recipe data, not direct laboratory analysis of the user's meal. CoFID is a UK reference, not an Indian branded-food database. The full IFCT ingredient tables and a bulk packaged-product dataset are not included.
 
-- **UI:** Cloudflare Pages, Vercel Hobby, or an existing GoDaddy static folder.
-- **Database:** Supabase free tier (Postgres). Run `supabase/schema.sql` in the SQL editor.
-- **Persistence:** connect the Supabase client in `src/lib/supabase.js`, then replace the demo entry functions with `food_entries` and `weigh_ins` inserts.
+Rebuild with Python and openpyxl: `python3 scripts/build_foods.py /path/to/source-downloads`. The directory must contain the named INDB and CoFID XLSX downloads plus `personal-foods.txt`, the saved workbook's extracted food table. Sources and selection rules are explicit in the script.
 
-The data model already separates foods, daily entries, profile targets and weigh-ins, so the log can grow without putting everything into one fragile spreadsheet.
+## Persistence
+
+Food logs, weight readings, targets and custom foods are saved to browser localStorage. **Cloud/Supabase sync is not implemented.** The earlier connection settings, if any, are not removed or exposed. Settings offers a JSON backup and merge import; exported backups exclude connection credentials. Clearing browser data without a backup loses these records. The public repository contains reference food data and the previously published recovered seed entries, not new browser-entered meals.
+
+Existing history keys and legacy custom foods are read. Page rendering never overwrites a date's log. A one-time migration backs up prior history before excluding the uneaten candy and planned dinner from the September 29 seed; exact copies of that seed on other dates are retained for review and excluded from totals until confirmed. Recovered entries retain their previous estimates. New dates start empty. Dates use Asia/Kolkata.
+
+Run the focused checks with `node tests/core.test.cjs` and `python3 scripts/check_data.py`. GitHub Pages deploys the main branch. There is no npm build or server-side database dependency.
