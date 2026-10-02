@@ -9,7 +9,7 @@ function write(key,value){try{localStorage.setItem(key,JSON.stringify(value));re
 function toast(message){$('#toast').textContent=message;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('#toast').textContent='',6000)}
 let snapshots=read('krishna_daily_snapshots',{}),weights=read('krishna_weight_log',[{date:'2026-09-12',kg:98.7},{date:'2026-09-19',kg:97.3},{date:'2026-09-24',kg:95.5}]);
 let custom=read('krishna_foods_v2',[]),targets=read('krishna_targets',{calories:1650,protein:120});
-let catalogue=null,foods=[],view='today',selectedDay=dayKey(),historyMonth=dayKey().slice(0,7),libraryDate=dayKey(),page=0,chosen=null;
+let catalogue=null,recipeDetails=null,foods=[],view='today',selectedDay=dayKey(),historyMonth=dayKey().slice(0,7),libraryDate=dayKey(),page=0,chosen=null;
 const PAGE_SIZE=30;
 const recoveredRows=[['Breakfast','Atukulu kobbari unda','31 g (1 piece)',130,2],['Breakfast','Homemade chegodi','7 pieces',175,2.8],['Breakfast','Banana','1 medium',105,1.3],['Snack','Cucumber','175 g',26,1.2],['Snack','Pomegranate seeds','60 g',50,1],['Snack','Beetroot','60 g',26,1],['Snack','Jabsons unsalted roasted peanuts','40 g',227,10.2],['Lunch','India Foods ulavacharu','250 g',648,45],['Lunch','Varigalu / proso millet (raw)','80 g raw',302,8.8]];
 const recoveredEntries=recoveredRows.map(([meal,name,qty,calories,protein])=>({meal,name,qty,calories,protein,note:'Recovered earlier estimate; review against your portion/label.'}));
@@ -60,6 +60,7 @@ async function loadCatalogue(){
  try{
   const response=await fetch('./data/foods.json?v=2026-09-30.1',{signal:controller.signal});if(!response.ok)throw new Error(`Download failed (${response.status}).`);
   const data=await response.json();if(!Array.isArray(data.foods)||data.foods.length<1000)throw new Error('Food file is incomplete.');catalogue=data;
+  try{const recipes=await fetch('./data/recipes.json?v=2026-10-02.1',{signal:controller.signal});if(!recipes.ok)throw new Error('Recipe file unavailable');recipeDetails=await recipes.json()}catch{recipeDetails=null}
   const oldCustom=read('krishna_custom_foods',[]).filter(Array.isArray).map((f,i)=>({id:'legacy-custom-'+i,name:f[0],category:'Your custom foods',preparation:'As described',source:'custom',evidence:'Earlier custom food',basis:{qty:1,unit:'serving'},nutrients:data.nutrientDefinitions.map((_,j)=>j===0?f[1]:j===1?f[2]:null),note:f[3]+'; values recovered from earlier app.'}));
   foods=[...custom,...oldCustom,...data.foods];$('#library-status').textContent=`${fmt(data.foods.length,0)} foods ready to search`;$('#library-count').textContent=fmt(data.foods.length,0);$('#library-subtitle').textContent='Indian recipes, everyday ingredients and your saved foods.';
   $('#library-summary').innerHTML=Object.entries(data.sources).map(([key,s])=>`<span><b>${fmt(s.count,0)}</b> ${key==='indb'?'Indian recipe records':key==='cofid'?'reference ingredients':'saved foods'}</span>`).join('');
@@ -81,8 +82,19 @@ function openFood(id){
  $('#food-title').textContent=f.name;$('#food-evidence').textContent=f.evidence+' · '+f.preparation;
  $('#portion-quantity').value=f.basis.qty;$('#portion-unit').innerHTML=`<option value="${escapeHTML(f.basis.unit)}">${escapeHTML(f.basis.unit)}</option>${f.portion?`<option value="portion">INDB portion: ${escapeHTML(f.portion.name)}</option>`:''}`;
  $('#entry-date').value=libraryDate;$('#entry-meal').value='Snack';$('#portion-error').textContent='';
+ renderRecipe(f);
  $('#food-source').innerHTML=`${escapeHTML(f.note||'')}<br>${source?escapeHTML(source.name)+' · '+escapeHTML(f.code||''):''}${source?.url?` · <a href="${escapeHTML(source.url)}" target="_blank" rel="noopener">Source</a>`:''}${/^https:\/\//.test(f.url||'')?` · <a href="${escapeHTML(f.url)}" target="_blank" rel="noopener">Saved reference</a>`:''}`;
  updatePortion();$('#food-dialog').showModal();
+}
+function renderRecipe(f){
+ const target=$('#recipe-details'),recipe=recipeDetails?.[f.code];
+ let basis=f.source==='indb'?'100 g of the prepared dish, including retained water and cooking fat. It is not 100 g of a dry main ingredient.':f.source==='cofid'?'100 g of the named food in its stated preparation; this is a single-food reference.':'The stated reference amount for this saved or custom food. Verify it against its packet or your recipe.';
+ if(f.source==='indb'&&recipe){
+  const [count,unit]=recipe.servings||[];
+  target.innerHTML='<h3>Recipe & measurement basis</h3><p class="muted">'+escapeHTML(basis)+'</p><p class="source-note">Ingredient amounts are for the <b>whole source recipe</b>'+(count?' ('+escapeHTML(count)+' '+escapeHTML(unit||'servings')+')':'')+', not per 100 g. Your oil, water, ingredients and finished weight may differ.</p><ul class="ingredient-list">'+recipe.ingredients.map(([name,qty,u])=>'<li><span>'+escapeHTML(name)+'</span><b>'+escapeHTML(qty)+(u?' '+escapeHTML(u):' (unit unspecified)')+'</b></li>').join('')+'</ul>'+(f.portion?'<p class="source-note">Source portion: 1 '+escapeHTML(f.portion.name)+' = '+fmt(f.portion.nutrients[0],0)+' kcal. Weigh your finished dish for a closer estimate.</p>':'');
+ }else{
+  target.innerHTML='<h3>Recipe & measurement basis</h3><p class="muted">'+escapeHTML(basis)+'</p><p class="source-note">'+(f.source==='indb'?'The source ingredient list could not load. Retry the page before relying on this recipe.':f.source==='cofid'?'No combined recipe or added cooking oil is included in this ingredient value.':'A raw-material breakdown was not supplied. Check its packet or define your own recipe before treating it as a cooked-dish estimate.')+'</p>';
+ }
 }
 function updatePortion(){
  if(!chosen)return;try{const n=scale(chosen,Number($('#portion-quantity').value),$('#portion-unit').value);$('#portion-error').textContent='';$('#log-food').disabled=false;
@@ -112,7 +124,27 @@ function renderProgress(){
  $('#weight-chart').innerHTML=`<svg class="weight-chart" viewBox="0 0 640 190" role="img" aria-label="Recorded weight over time"><polyline points="${ordered.map(w=>x(w)+','+y(w)).join(' ')}"/>${ordered.map(w=>`<circle cx="${x(w)}" cy="${y(w)}" r="4"><title>${escapeHTML(w.date)}: ${w.kg} kg</title></circle>`).join('')}<text x="12" y="20">${fmt(max)} kg</text><text x="12" y="170">${fmt(min)} kg</text><text x="40" y="185">${ordered[0].date}</text><text x="500" y="185">${ordered.at(-1).date}</text></svg>`;
  const valid=Object.values(snapshots).filter(s=>!s.needsReview&&s.entries?.length),values=valid.map(s=>totals(s.entries));$('#progress-note').textContent=valid.length?`${valid.length} logged day(s) · average known calories ${fmt(values.reduce((a,t)=>a+t.calories,0)/valid.length,0)} kcal. Partial days and missing nutrients affect this average.`:'Add meals to see intake history.';
 }
-function renderSettings(){$('#target-calories').value=targets.calories;$('#target-protein').value=targets.protein}
+function renderSettings(){
+ $('#target-calories').value=targets.calories;$('#target-protein').value=targets.protein;
+ $('#sburl').value=localStorage.getItem('krishna_sb_url')||'';
+ $('#sbkey').value=localStorage.getItem('krishna_sb_key')||'';
+ $('#sb-status').textContent=localStorage.getItem('krishna_sb_url')&&localStorage.getItem('krishna_sb_key')?'Connection details found in this browser. Food logs are still local; cloud sync was never implemented.':'No connection details found in this browser. Food logs are stored locally.';
+ $('#local-status').textContent=Object.keys(snapshots).length+' dates in this browser · '+weights.length+' weight readings · '+custom.length+' custom foods. Earlier history backup: '+(Object.keys(read('krishna_history_before_catalogue',{})).length?'present':'absent')+'.';
+}
+function supabaseDetails(){const u=$('#sburl').value.trim().replace(/\/$/,'');const k=$('#sbkey').value.trim();return {u,k,valid:u.startsWith('https://')&&u.endsWith('.supabase.co')&&!u.includes(' ')&&!!k}}
+async function testSupabase(){
+ const {u,k,valid}=supabaseDetails();
+ if(!valid){$('#sb-status').textContent='Enter a valid Supabase project URL and anon/publishable key.';return}
+ $('#sb-status').textContent='Testing project response…';
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
+ try{const response=await fetch(u+'/auth/v1/health',{headers:{apikey:k},signal:controller.signal});
+ $('#sb-status').textContent=response.ok?'Supabase project responds. This tests reachability only; your meals are not synced.':'Project replied HTTP '+response.status+'. Check the URL, key and project status. No food logs were changed.';
+ }catch(e){$('#sb-status').textContent='Connection failed: '+(e.name==='AbortError'?'timed out':'network or browser access error')+'. No food logs were changed.'}finally{clearTimeout(timer)}
+}
+function saveSupabaseSettings(e){
+ e.preventDefault();const {u,k,valid}=supabaseDetails();if(!valid){$('#sb-status').textContent='Enter a valid project URL and anon/publishable key.';return}
+ try{localStorage.setItem('krishna_sb_url',u);localStorage.setItem('krishna_sb_key',k);$('#sb-status').textContent='Connection details saved in this browser. Cloud sync is not active.'}catch{$('#sb-status').textContent='Browser storage could not save connection details.'}
+}
 function download(name,value){const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function exportBackup(){download('Krishna-Cut-backup-'+dayKey()+'.json',{version:2,exportedAt:new Date().toISOString(),snapshots,weights,custom,legacyCustom:read('krishna_custom_foods',[]),targets,previousHistory:read('krishna_history_before_catalogue',{})});toast('Backup downloaded.')}
 async function importBackup(file){
@@ -149,6 +181,6 @@ $('#portion-quantity').oninput=updatePortion;$('#portion-unit').onchange=()=>{$(
 $('#prev-month').onclick=()=>changeMonth(-1);$('#next-month').onclick=()=>changeMonth(1);$('#history-date').onchange=e=>{if(e.target.value){selectedDay=e.target.value;historyMonth=selectedDay.slice(0,7);renderHistory()}};
 $('#weight-form').onsubmit=e=>{e.preventDefault();const date=$('#weight-date').value,kg=Number($('#weight-value').value);if(!date||!Number.isFinite(kg)||kg<=0)return;const next=[...weights.filter(w=>w.date!==date),{date,kg}];if(!write('krishna_weight_log',next))return;weights=next;renderProgress();renderToday();$('#weight-value').value='';toast('Weight saved.')};
 $('#targets-form').onsubmit=e=>{e.preventDefault();const next={calories:Number($('#target-calories').value),protein:Number($('#target-protein').value)};if(!Number.isFinite(next.calories)||next.calories<=0||!Number.isFinite(next.protein)||next.protein<=0)return;if(write('krishna_targets',next)){targets=next;renderToday();toast('Targets saved.')}};
-$('#export-backup').onclick=exportBackup;$('#import-backup').onchange=e=>importBackup(e.target.files[0]);$('#download-library').onclick=()=>{if(catalogue)download('Krishna-Cut-food-library.json',catalogue)};
+$('#sb-form').onsubmit=saveSupabaseSettings;$('#sb-test').onclick=testSupabase;$('#export-backup').onclick=exportBackup;$('#import-backup').onchange=e=>importBackup(e.target.files[0]);$('#download-library').onclick=()=>{if(catalogue)download('Krishna-Cut-food-library.json',catalogue)};
 migrate();renderToday();loadCatalogue();
 setInterval(()=>{if(dayKey()!==$('#today-date-marker').value){$('#today-date-marker').value=dayKey();renderToday()}},30000);$('#today-date-marker').value=dayKey();
